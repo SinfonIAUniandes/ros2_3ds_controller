@@ -10,7 +10,7 @@
 #include "logging/app_log.h"
 #include "touch_ui.h"
 
-#define SOC_BUFFER_SIZE 0x100000
+#define SOC_BUFFER_SIZE 0x400000
 
 int main(int argc, char **argv) {
     (void)argc;

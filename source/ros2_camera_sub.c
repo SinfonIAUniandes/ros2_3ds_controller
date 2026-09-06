@@ -140,8 +140,10 @@ static void update_texture_from_rgba(ros2_camera_sub *sub, uint32_t width, uint3
     uint32_t w_pow2 = next_power_of_2(width);
     uint32_t h_pow2 = next_power_of_2(height);
 
-    if (w_pow2 > 512) w_pow2 = 512;
-    if (h_pow2 > 512) h_pow2 = 512;
+    if (w_pow2 > 1024) w_pow2 = 1024;
+    if (h_pow2 > 1024) h_pow2 = 1024;
+    if (width > w_pow2) width = w_pow2;
+    if (height > h_pow2) height = h_pow2;
 
     if (!sub->tex_allocated || sub->tex_w != w_pow2 || sub->tex_h != h_pow2) {
         if (sub->tex_allocated) {
@@ -195,49 +197,78 @@ static void update_texture_from_rgba(ros2_camera_sub *sub, uint32_t width, uint3
     sub->has_frame = true;
 }
 
+#define CAMERA_BATCH_SIZE 8
+
 bool ros2_camera_sub_poll(ros2_camera_sub *sub) {
     if (!sub || !sub->enabled || sub->reader <= DDS_ENTITY_NIL || !sub->tj || !sub->rgba_buffer) {
         return false;
     }
 
-    sensor_msgs_msg_dds__CompressedImage_ *sample = NULL;
-    dds_sample_info_t info;
-    void *samples[1] = { NULL };
+    void *samples[CAMERA_BATCH_SIZE];
+    dds_sample_info_t infos[CAMERA_BATCH_SIZE];
+    dds_return_t count = 0;
+    bool new_frame_decoded = false;
 
-    dds_return_t ret = dds_take(sub->reader, samples, &info, 1, 1);
-    if (ret > 0 && info.valid_data && samples[0] != NULL) {
-        sample = (sensor_msgs_msg_dds__CompressedImage_ *)samples[0];
+    /* Drain all available samples from reader in batches. Only decompress the latest valid frame
+       to maintain real-time zero latency and prevent Cyclone DDS / OS socket buffer congestion. */
+    while ((count = dds_take(sub->reader, samples, infos, CAMERA_BATCH_SIZE, CAMERA_BATCH_SIZE)) > 0) {
+        int latest_valid_idx = -1;
+        for (int i = (int)count - 1; i >= 0; i--) {
+            if (infos[i].valid_data && samples[i] != NULL) {
+                latest_valid_idx = i;
+                break;
+            }
+        }
 
-        if (sample->data._length > 0 && sample->data._buffer != NULL) {
-            int width = 0, height = 0, jpeg_subsamp = 0, jpeg_colorspace = 0;
-            if (tjDecompressHeader3(sub->tj, (unsigned char *)sample->data._buffer,
-                                    sample->data._length, &width, &height,
-                                    &jpeg_subsamp, &jpeg_colorspace) == 0) {
-                if (width > 0 && height > 0 &&
-                    width <= MAX_SUPPORTED_WIDTH && height <= MAX_SUPPORTED_HEIGHT) {
-                    if (tjDecompress2(sub->tj, (unsigned char *)sample->data._buffer,
-                                      sample->data._length, sub->rgba_buffer,
-                                      width, 0, height, TJPF_RGBA, TJFLAG_FASTDCT) == 0) {
-                        update_texture_from_rgba(sub, (uint32_t)width, (uint32_t)height);
-                        sub->frames_received++;
-                        sub->fps_counter++;
+        if (latest_valid_idx >= 0) {
+            sensor_msgs_msg_dds__CompressedImage_ *sample =
+                (sensor_msgs_msg_dds__CompressedImage_ *)samples[latest_valid_idx];
 
-                        uint64_t now = osGetTime();
-                        if (now - sub->last_fps_time_ms >= 1000) {
-                            sub->current_fps = (float)sub->fps_counter * 1000.0f / (float)(now - sub->last_fps_time_ms);
-                            sub->fps_counter = 0;
-                            sub->last_fps_time_ms = now;
+            if (sample->data._length > 0 && sample->data._buffer != NULL) {
+                int orig_w = 0, orig_h = 0, jpeg_subsamp = 0, jpeg_colorspace = 0;
+                if (tjDecompressHeader3(sub->tj, (unsigned char *)sample->data._buffer,
+                                        sample->data._length, &orig_w, &orig_h,
+                                        &jpeg_subsamp, &jpeg_colorspace) == 0) {
+                    if (orig_w > 0 && orig_h > 0 &&
+                        orig_w <= MAX_SUPPORTED_WIDTH && orig_h <= MAX_SUPPORTED_HEIGHT) {
+                        int dec_w = orig_w;
+                        int dec_h = orig_h;
+
+                        /* If image resolution is 640x480 or larger, downscale by 1/2 via
+                           TurboJPEG fast IDCT scaling to fit 400x240 screen and save CPU time */
+                        if (orig_w >= 640 || orig_h >= 480) {
+                            dec_w = (orig_w + 1) / 2;
+                            dec_h = (orig_h + 1) / 2;
+                        }
+
+                        if (tjDecompress2(sub->tj, (unsigned char *)sample->data._buffer,
+                                          sample->data._length, sub->rgba_buffer,
+                                          dec_w, 0, dec_h, TJPF_RGBA, TJFLAG_FASTDCT) == 0) {
+                            update_texture_from_rgba(sub, (uint32_t)dec_w, (uint32_t)dec_h);
+                            sub->frames_received++;
+                            sub->fps_counter++;
+                            new_frame_decoded = true;
+
+                            uint64_t now = osGetTime();
+                            if (now - sub->last_fps_time_ms >= 1000) {
+                                sub->current_fps = (float)sub->fps_counter * 1000.0f / (float)(now - sub->last_fps_time_ms);
+                                sub->fps_counter = 0;
+                                sub->last_fps_time_ms = now;
+                            }
                         }
                     }
                 }
             }
         }
 
-        dds_return_loan(sub->reader, samples, 1);
-        return true;
+        dds_return_loan(sub->reader, samples, count);
+
+        if (count < CAMERA_BATCH_SIZE) {
+            break;
+        }
     }
 
-    return false;
+    return new_frame_decoded;
 }
 
 void ros2_camera_sub_draw(ros2_camera_sub *sub, float screen_w, float screen_h) {

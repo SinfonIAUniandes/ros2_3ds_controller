@@ -9,7 +9,13 @@
 #define DDS_3DS_GENERAL_CONFIG \
     "<General><MaxMessageSize>1456 B</MaxMessageSize>" \
     "<MaxRexmitMessageSize>1456 B</MaxRexmitMessageSize>" \
-    "<FragmentSize>1344 B</FragmentSize></General>"
+    "<FragmentSize>1344 B</FragmentSize></General>" \
+    "<Internal>" \
+    "<SocketReceiveBufferSize min=\"64kB\" max=\"256kB\"/>" \
+    "<SocketSendBufferSize min=\"32kB\" max=\"64kB\"/>" \
+    "<DeliveryQueueMaxSamples>8</DeliveryQueueMaxSamples>" \
+    "<DefragUnreliableMaxSamples>4</DefragUnreliableMaxSamples>" \
+    "</Internal>"
 
 void dds_controller_runtime_init(dds_controller_runtime *rt) {
     if (!rt) return;
@@ -36,7 +42,7 @@ bool dds_controller_runtime_start(dds_controller_runtime *rt, const controller_c
 
     const char *domain_config = "<CycloneDDS><Domain Id=\"any\">" DDS_3DS_GENERAL_CONFIG
                                 "</Domain></CycloneDDS>";
-    char peer_domain_config[768];
+    char peer_domain_config[1024];
 
     const char *peer_ip = rt->config.peer_ip;
     const char *broadcast_ip = rt->config.broadcast_ip;

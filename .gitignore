@@ -4,5 +4,6 @@ build/
 *.lst
 *.map
 *.smdh
-
 *.log
+*.dmp
+parse_dmp.py
