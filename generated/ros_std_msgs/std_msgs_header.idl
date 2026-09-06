@@ -1,0 +1,26 @@
+#ifndef ROS2_STD_MSGS_HEADER_IDL
+#define ROS2_STD_MSGS_HEADER_IDL
+
+module builtin_interfaces {
+  module msg {
+    module dds_ {
+      struct Time_ {
+        int32 sec;
+        uint32 nanosec;
+      };
+    };
+  };
+};
+
+module std_msgs {
+  module msg {
+    module dds_ {
+      struct Header_ {
+        builtin_interfaces::msg::dds_::Time_ stamp;
+        string frame_id;
+      };
+    };
+  };
+};
+
+#endif

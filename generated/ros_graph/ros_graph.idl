@@ -1,0 +1,23 @@
+module rmw_dds_common {
+  module msg {
+    module dds_ {
+      typedef uint8 uint8__16[16];
+
+      struct Gid_ {
+        uint8__16 data;
+      };
+
+      struct NodeEntitiesInfo_ {
+        string<256> node_namespace;
+        string<256> node_name;
+        sequence<rmw_dds_common::msg::dds_::Gid_> reader_gid_seq;
+        sequence<rmw_dds_common::msg::dds_::Gid_> writer_gid_seq;
+      };
+
+      struct ParticipantEntitiesInfo_ {
+        rmw_dds_common::msg::dds_::Gid_ gid;
+        sequence<rmw_dds_common::msg::dds_::NodeEntitiesInfo_> node_entities_info_seq;
+      };
+    };
+  };
+};
