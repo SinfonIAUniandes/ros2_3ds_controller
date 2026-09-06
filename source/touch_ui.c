@@ -7,8 +7,17 @@
 
 #include "logging/app_log.h"
 
+static void draw_rect(float x, float y, float w, float h, u32 color) {
+    C2D_DrawRectSolid(x, y, 0.5f, w, h, color);
+}
+
+static void draw_panel(touch_ui *ui, float x, float y, float w, float h) {
+    draw_rect(x, y, w, h, ui->col_border);
+    draw_rect(x + 1.0f, y + 1.0f, w - 2.0f, h - 2.0f, ui->col_surface);
+}
+
 static void draw_text(touch_ui *ui, float x, float y, float scale, u32 color, const char *str) {
-    if (!ui || !ui->text_buf || !str) return;
+    if (!ui || !ui->text_buf || !str || str[0] == '\0') return;
     C2D_Text parsed;
     C2D_TextParse(&parsed, ui->text_buf, str);
     C2D_TextOptimize(&parsed);
@@ -24,29 +33,66 @@ static void draw_textf(touch_ui *ui, float x, float y, float scale, u32 color, c
     draw_text(ui, x, y, scale, color, buf);
 }
 
-static void draw_rect(float x, float y, float w, float h, u32 color) {
-    C2D_DrawRectSolid(x, y, 0.5f, w, h, color);
-}
-
 static void draw_button(touch_ui *ui, float x, float y, float w, float h,
                         u32 bg_color, u32 border_color, const char *label, const char *sublabel) {
     draw_rect(x, y, w, h, border_color);
     draw_rect(x + 1.0f, y + 1.0f, w - 2.0f, h - 2.0f, bg_color);
 
     if (sublabel && sublabel[0] != '\0') {
-        draw_text(ui, x + 8.0f, y + 4.0f, 0.42f, ui->col_text, label);
-        draw_text(ui, x + 8.0f, y + 18.0f, 0.32f, ui->col_subtext, sublabel);
+        draw_text(ui, x + 8.0f, y + 3.0f, 0.40f, ui->col_text, label);
+        draw_text(ui, x + 8.0f, y + 18.0f, 0.30f, ui->col_muted, sublabel);
     } else {
-        draw_text(ui, x + 8.0f, y + (h - 14.0f) * 0.5f, 0.40f, ui->col_text, label);
+        float text_y = y + (h - 13.0f) * 0.5f;
+        draw_text(ui, x + 8.0f, text_y, 0.38f, ui->col_text, label);
     }
 }
 
-static void draw_badge(touch_ui *ui, float x, float y, float w, float h, const char *text, bool active, u32 active_color) {
-    u32 bg = active ? active_color : C2D_Color32(35, 40, 50, 255);
-    u32 fg = active ? C2D_Color32(255, 255, 255, 255) : C2D_Color32(110, 120, 135, 255);
-    draw_rect(x, y, w, h, C2D_Color32(50, 58, 70, 255));
+static void draw_badge(touch_ui *ui, float x, float y, float w, float h,
+                       const char *text, bool active, u32 active_color) {
+    u32 bg = active ? active_color : C2D_Color32(36, 42, 54, 255);
+    u32 border = active ? C2D_Color32(255, 255, 255, 255) : C2D_Color32(55, 65, 80, 255);
+    u32 fg = active ? C2D_Color32(255, 255, 255, 255) : C2D_Color32(130, 145, 165, 255);
+
+    draw_rect(x, y, w, h, border);
     draw_rect(x + 1.0f, y + 1.0f, w - 2.0f, h - 2.0f, bg);
-    draw_text(ui, x + (w - 12.0f) * 0.5f, y + (h - 12.0f) * 0.5f, 0.35f, fg, text);
+
+    size_t len = strlen(text);
+    float text_scale = (len >= 3) ? 0.28f : 0.34f;
+    float text_x = x + 3.0f;
+    if (len == 1) text_x = x + (w - 7.0f) * 0.5f;
+    else if (len == 2) text_x = x + (w - 14.0f) * 0.5f;
+    else if (len >= 3) text_x = x + (w - 24.0f) * 0.5f;
+
+    float text_y = y + (h - 11.0f) * 0.5f;
+    draw_text(ui, text_x, text_y, text_scale, fg, text);
+}
+
+static void draw_stick_panel(touch_ui *ui, float x, float y, float w, float h,
+                             const char *title, float stick_x, float stick_y, u32 dot_color) {
+    draw_panel(ui, x, y, w, h);
+    draw_text(ui, x + 12.0f, y + 6.0f, 0.36f, ui->col_muted, title);
+
+    float box_size = 52.0f;
+    float box_x = x + (w - box_size) * 0.5f;
+    float box_y = y + 26.0f;
+    float center_x = box_x + box_size * 0.5f;
+    float center_y = box_y + box_size * 0.5f;
+
+    draw_rect(box_x, box_y, box_size, box_size, C2D_Color32(24, 28, 38, 255));
+    draw_rect(box_x, box_y, box_size, 1.0f, ui->col_border);
+    draw_rect(box_x, box_y + box_size - 1.0f, box_size, 1.0f, ui->col_border);
+    draw_rect(box_x, box_y, 1.0f, box_size, ui->col_border);
+    draw_rect(box_x + box_size - 1.0f, box_y, 1.0f, box_size, ui->col_border);
+
+    draw_rect(box_x + 2.0f, center_y, box_size - 4.0f, 1.0f, C2D_Color32(45, 54, 70, 255));
+    draw_rect(center_x, box_y + 2.0f, 1.0f, box_size - 4.0f, C2D_Color32(45, 54, 70, 255));
+
+    float dot_x = center_x - stick_x * 20.0f;
+    float dot_y = center_y - stick_y * 20.0f;
+    draw_rect(dot_x - 3.0f, dot_y - 3.0f, 6.0f, 6.0f, dot_color);
+
+    draw_textf(ui, x + 12.0f, y + 84.0f, 0.34f, ui->col_text, "X: %+.2f", stick_x);
+    draw_textf(ui, x + 12.0f, y + 100.0f, 0.34f, ui->col_text, "Y: %+.2f", stick_y);
 }
 
 bool touch_ui_init(touch_ui *ui) {
@@ -60,7 +106,7 @@ bool touch_ui_init(touch_ui *ui) {
         return false;
     }
 
-    ui->text_buf = C2D_TextBufNew(4096);
+    ui->text_buf = C2D_TextBufNew(16384);
     if (!ui->text_buf) {
         app_log_write(APP_LOG_ERROR, "Failed to allocate text buffer");
         return false;
@@ -70,16 +116,16 @@ bool touch_ui_init(touch_ui *ui) {
     ui->exit_requested = false;
 
     /* Theme colors */
-    ui->col_bg          = C2D_Color32(13, 17, 23, 255);
-    ui->col_surface     = C2D_Color32(22, 27, 34, 255);
-    ui->col_header      = C2D_Color32(33, 38, 45, 255);
-    ui->col_border      = C2D_Color32(48, 54, 61, 255);
-    ui->col_accent      = C2D_Color32(31, 111, 235, 255);
-    ui->col_btn         = C2D_Color32(33, 40, 52, 255);
-    ui->col_btn_active  = C2D_Color32(46, 120, 242, 255);
-    ui->col_text        = C2D_Color32(240, 246, 252, 255);
-    ui->col_subtext     = C2D_Color32(139, 148, 158, 255);
-    ui->col_danger      = C2D_Color32(218, 54, 51, 255);
+    ui->col_bg          = C2D_Color32(20, 24, 32, 255);
+    ui->col_surface     = C2D_Color32(32, 38, 50, 255);
+    ui->col_header      = C2D_Color32(28, 34, 46, 255);
+    ui->col_border      = C2D_Color32(55, 65, 82, 255);
+    ui->col_accent      = C2D_Color32(30, 136, 229, 255);
+    ui->col_btn         = C2D_Color32(40, 48, 64, 255);
+    ui->col_btn_active  = C2D_Color32(30, 136, 229, 255);
+    ui->col_text        = C2D_Color32(255, 255, 255, 255);
+    ui->col_muted       = C2D_Color32(140, 155, 175, 255);
+    ui->col_danger      = C2D_Color32(220, 50, 50, 255);
     ui->col_success     = C2D_Color32(46, 160, 67, 255);
 
     ui->status_msg[0] = '\0';
@@ -112,281 +158,203 @@ void touch_ui_update_inputs(touch_ui *ui, float cpad_x, float cpad_y,
     ui->keys_held = keys_held;
 }
 
-void touch_ui_handle_touch(touch_ui *ui, dds_controller_runtime *dds, u16 px, u16 py) {
-    if (!ui || !dds) return;
+static inline bool hit_test(u16 px, u16 py, float x, float y, float w, float h) {
+    return (float)px >= x && (float)px < (x + w) && (float)py >= y && (float)py < (y + h);
+}
+
+ui_action touch_ui_handle_touch(touch_ui *ui, u16 px, u16 py) {
+    if (!ui) return UI_ACTION_NONE;
+
+    /* Top Navigation Tabs */
+    if (py >= 2 && py <= 26) {
+        if (hit_test(px, py, 4.0f, 2.0f, 102.0f, 24.0f)) {
+            ui->mode = UI_MODE_MAIN;
+            return UI_ACTION_TAB_CONTROLLER;
+        }
+        if (hit_test(px, py, 110.0f, 2.0f, 102.0f, 24.0f)) {
+            ui->mode = UI_MODE_SETTINGS;
+            return UI_ACTION_TAB_SETTINGS;
+        }
+        if (hit_test(px, py, 216.0f, 2.0f, 100.0f, 24.0f)) {
+            ui->exit_requested = true;
+            return UI_ACTION_EXIT;
+        }
+    }
 
     if (ui->mode == UI_MODE_MAIN) {
-        /* Row 1 Action Buttons */
-        if (py >= 26 && py <= 54) {
-            /* [ ⌨ Cmd ] Button */
-            if (px >= 6 && px <= 102) {
-                SwkbdState swkbd;
-                swkbdInit(&swkbd, SWKBD_TYPE_NORMAL, 2, -1);
-                swkbdSetButton(&swkbd, SWKBD_BUTTON_LEFT, "Cancel", false);
-                swkbdSetButton(&swkbd, SWKBD_BUTTON_RIGHT, "Send", true);
-                swkbdSetHintText(&swkbd, "Enter command / text message");
-                char text[128] = "";
-                SwkbdButton btn = swkbdInputText(&swkbd, text, sizeof(text));
-                if (btn == SWKBD_BUTTON_CONFIRM && text[0] != '\0') {
-                    dds_controller_runtime_publish_string(dds, text);
-                    touch_ui_set_status(ui, "Command String Sent!");
-                }
-                return;
+        /* Row 2 Actions */
+        if (py >= 28 && py <= 52) {
+            if (hit_test(px, py, 4.0f, 28.0f, 102.0f, 24.0f)) {
+                return UI_ACTION_SEND_COMMAND;
             }
-            /* [ ⚙ Config ] Button */
-            else if (px >= 108 && px <= 204) {
-                ui->mode = UI_MODE_SETTINGS;
-                return;
+            if (hit_test(px, py, 110.0f, 28.0f, 102.0f, 24.0f)) {
+                return UI_ACTION_TOGGLE_JOY;
             }
-            /* [ EXIT ] Button */
-            else if (px >= 210 && px <= 314) {
-                ui->exit_requested = true;
-                return;
-            }
-        }
-        /* Row 2 Toggles */
-        else if (py >= 58 && py <= 84) {
-            /* [ Joy: ON/OFF ] */
-            if (px >= 6 && px <= 156) {
-                dds->config.joy_enabled = !dds->config.joy_enabled;
-                dds->joy.enabled = dds->config.joy_enabled;
-                controller_config_save(&dds->config);
-                touch_ui_set_status(ui, dds->config.joy_enabled ? "Joy Streaming: ON" : "Joy Streaming: OFF");
-                return;
-            }
-            /* [ Cam: ON/OFF ] */
-            else if (px >= 164 && px <= 314) {
-                dds->config.camera_enabled = !dds->config.camera_enabled;
-                dds->camera.enabled = dds->config.camera_enabled;
-                controller_config_save(&dds->config);
-                touch_ui_set_status(ui, dds->config.camera_enabled ? "Camera RX: ON" : "Camera RX: OFF");
-                return;
+            if (hit_test(px, py, 216.0f, 28.0f, 100.0f, 24.0f)) {
+                return UI_ACTION_TOGGLE_CAMERA;
             }
         }
     } else if (ui->mode == UI_MODE_SETTINGS) {
-        /* Option 1: Domain ID */
-        if (py >= 30 && py <= 62 && px >= 8 && px <= 312) {
-            SwkbdState swkbd;
-            swkbdInit(&swkbd, SWKBD_TYPE_NUMPAD, 2, 4);
-            swkbdSetButton(&swkbd, SWKBD_BUTTON_LEFT, "Cancel", false);
-            swkbdSetButton(&swkbd, SWKBD_BUTTON_RIGHT, "Apply", true);
-            char init_str[16];
-            snprintf(init_str, sizeof(init_str), "%lu", (unsigned long)dds->config.domain_id);
-            swkbdSetInitialText(&swkbd, init_str);
-            swkbdSetHintText(&swkbd, "Enter ROS Domain ID (0 - 232)");
-            char text[16] = "";
-            SwkbdButton btn = swkbdInputText(&swkbd, text, sizeof(text));
-            if (btn == SWKBD_BUTTON_CONFIRM && text[0] != '\0') {
-                long d = strtol(text, NULL, 10);
-                if (d >= 0 && d <= 232) {
-                    dds_controller_runtime_set_domain_id(dds, (uint32_t)d);
-                    touch_ui_set_status(ui, "Domain ID Updated & Restarted");
-                }
-            }
-            return;
+        if (hit_test(px, py, 6.0f, 58.0f, 308.0f, 36.0f)) {
+            return UI_ACTION_EDIT_DOMAIN_ID;
         }
-        /* Option 2: Namespace */
-        else if (py >= 66 && py <= 98 && px >= 8 && px <= 312) {
-            SwkbdState swkbd;
-            swkbdInit(&swkbd, SWKBD_TYPE_NORMAL, 2, 60);
-            swkbdSetButton(&swkbd, SWKBD_BUTTON_LEFT, "Cancel", false);
-            swkbdSetButton(&swkbd, SWKBD_BUTTON_RIGHT, "Apply", true);
-            swkbdSetInitialText(&swkbd, dds->config.ros_namespace);
-            swkbdSetHintText(&swkbd, "Enter ROS namespace (e.g. /my_robot)");
-            char text[64] = "";
-            SwkbdButton btn = swkbdInputText(&swkbd, text, sizeof(text));
-            if (btn == SWKBD_BUTTON_CONFIRM && text[0] != '\0') {
-                dds_controller_runtime_set_namespace(dds, text);
-                touch_ui_set_status(ui, "Namespace Updated");
-            }
-            return;
+        if (hit_test(px, py, 6.0f, 98.0f, 308.0f, 36.0f)) {
+            return UI_ACTION_EDIT_NAMESPACE;
         }
-        /* Option 3: Camera Topic */
-        else if (py >= 102 && py <= 134 && px >= 8 && px <= 312) {
-            SwkbdState swkbd;
-            swkbdInit(&swkbd, SWKBD_TYPE_NORMAL, 2, 120);
-            swkbdSetButton(&swkbd, SWKBD_BUTTON_LEFT, "Cancel", false);
-            swkbdSetButton(&swkbd, SWKBD_BUTTON_RIGHT, "Apply", true);
-            swkbdSetInitialText(&swkbd, dds->config.camera_topic);
-            swkbdSetHintText(&swkbd, "Enter Camera Topic");
-            char text[128] = "";
-            SwkbdButton btn = swkbdInputText(&swkbd, text, sizeof(text));
-            if (btn == SWKBD_BUTTON_CONFIRM && text[0] != '\0') {
-                dds_controller_runtime_set_camera_topic(dds, text);
-                touch_ui_set_status(ui, "Camera Topic Re-subscribed");
-            }
-            return;
+        if (hit_test(px, py, 6.0f, 138.0f, 308.0f, 36.0f)) {
+            return UI_ACTION_EDIT_CAMERA_TOPIC;
         }
-        /* Option 4: Save Config to SD */
-        else if (py >= 138 && py <= 170 && px >= 8 && px <= 312) {
-            if (controller_config_save(&dds->config)) {
-                touch_ui_set_status(ui, "Config Saved to SD Card");
-            } else {
-                touch_ui_set_status(ui, "Error Saving to SD Card");
-            }
-            return;
-        }
-        /* Option 5: Back to Controller */
-        else if (py >= 182 && py <= 226 && px >= 16 && px <= 304) {
-            ui->mode = UI_MODE_MAIN;
-            return;
+        if (hit_test(px, py, 6.0f, 178.0f, 308.0f, 36.0f)) {
+            return UI_ACTION_SAVE_CONFIG;
         }
     }
+
+    return UI_ACTION_NONE;
 }
 
-void touch_ui_render_top(touch_ui *ui, dds_controller_runtime *dds) {
-    if (!ui || !dds) return;
-
-    C2D_SceneBegin(ui->top_screen);
-
-    /* Render video or Standby box */
-    ros2_camera_sub_draw(&dds->camera, 400.0f, 240.0f);
-
+static void touch_ui_render_top_internal(touch_ui *ui, dds_controller_runtime *dds) {
     if (dds->camera.enabled && dds->camera.has_frame) {
-        /* Live Video OSD */
-        draw_textf(ui, 12.0f, 10.0f, 0.38f, C2D_Color32(230, 240, 255, 255),
-                   "%lux%lu  %.1f FPS", (unsigned long)dds->camera.img_width,
-                   (unsigned long)dds->camera.img_height, dds->camera.current_fps);
-        draw_text(ui, 12.0f, 222.0f, 0.34f, C2D_Color32(200, 210, 225, 255),
-                  dds->config.camera_topic);
+        ros2_camera_sub_draw(&dds->camera, 400.0f, 240.0f);
+
+        draw_rect(0, 218.0f, 400.0f, 22.0f, C2D_Color32(10, 14, 20, 220));
+        draw_textf(ui, 8.0f, 222.0f, 0.36f, C2D_Color32(230, 240, 255, 255),
+                   "Topic: %s | %lux%lu @ %.1f FPS", dds->config.camera_topic,
+                   (unsigned long)dds->camera.img_width,
+                   (unsigned long)dds->camera.img_height,
+                   dds->camera.current_fps);
     } else {
-        /* Standby Box Content */
-        float box_x = (400.0f - 340.0f) * 0.5f;
-        float box_y = (240.0f - 140.0f) * 0.5f;
+        float box_x = 20.0f;
+        float box_y = 20.0f;
+        float box_w = 360.0f;
+        float box_h = 200.0f;
 
-        draw_text(ui, box_x + 12.0f, box_y + 6.0f, 0.44f, ui->col_text, "ROS 2 CAMERA RECEIVER");
-        draw_text(ui, box_x + 12.0f, box_y + 36.0f, 0.38f, ui->col_subtext, "Subscribed Topic:");
-        draw_text(ui, box_x + 12.0f, box_y + 52.0f, 0.40f, ui->col_accent, dds->config.camera_topic);
+        draw_panel(ui, box_x, box_y, box_w, box_h);
+        draw_rect(box_x + 1.0f, box_y + 1.0f, box_w - 2.0f, 26.0f, ui->col_header);
 
-        draw_textf(ui, box_x + 12.0f, box_y + 78.0f, 0.36f, ui->col_text,
-                   "Domain ID: %lu  |  Status: %s", (unsigned long)dds->config.domain_id,
-                   dds->config.camera_enabled ? "Waiting for video..." : "Camera RX Disabled");
+        draw_text(ui, box_x + 12.0f, box_y + 6.0f, 0.44f, ui->col_text, "ROS 2 ROBOT CAMERA MONITOR");
+        draw_text(ui, box_x + 14.0f, box_y + 38.0f, 0.36f, ui->col_muted, "Subscribed Topic:");
+        draw_text(ui, box_x + 14.0f, box_y + 54.0f, 0.42f, ui->col_accent, dds->config.camera_topic);
 
-        draw_text(ui, box_x + 12.0f, box_y + 104.0f, 0.34f, ui->col_subtext,
-                  "Configurable via bottom touch screen [ ⚙ Config ]");
+        draw_textf(ui, box_x + 14.0f, box_y + 84.0f, 0.38f, ui->col_text,
+                   "Domain ID: %lu   Namespace: %s", (unsigned long)dds->config.domain_id,
+                   dds->config.ros_namespace);
+
+        const char *status_str = dds->config.camera_enabled ? "Waiting for incoming CompressedImage..." : "Camera RX Disabled";
+        u32 status_col = dds->config.camera_enabled ? ui->col_success : ui->col_danger;
+        draw_textf(ui, box_x + 14.0f, box_y + 108.0f, 0.36f, status_col, "Status: %s", status_str);
+
+        draw_text(ui, box_x + 14.0f, box_y + 146.0f, 0.34f, ui->col_muted,
+                  "Use bottom screen [SETTINGS] to change topic or domain ID");
     }
 }
 
-void touch_ui_render_bottom(touch_ui *ui, dds_controller_runtime *dds) {
-    if (!ui || !dds) return;
-
-    C2D_SceneBegin(ui->bottom_screen);
-    C2D_TextBufClear(ui->text_buf);
-
-    /* Fill background */
-    draw_rect(0, 0, 320.0f, 240.0f, ui->col_bg);
+static void touch_ui_render_bottom_internal(touch_ui *ui, dds_controller_runtime *dds) {
+    /* Row 1: Top Navigation Tabs */
+    u32 tab1_bg = (ui->mode == UI_MODE_MAIN) ? ui->col_accent : ui->col_surface;
+    u32 tab2_bg = (ui->mode == UI_MODE_SETTINGS) ? ui->col_accent : ui->col_surface;
+    draw_button(ui, 4.0f, 2.0f, 102.0f, 24.0f, tab1_bg, ui->col_border, "CONTROLS", NULL);
+    draw_button(ui, 110.0f, 2.0f, 102.0f, 24.0f, tab2_bg, ui->col_border, "SETTINGS", NULL);
+    draw_button(ui, 216.0f, 2.0f, 100.0f, 24.0f, ui->col_danger, ui->col_border, "EXIT APP", NULL);
 
     if (ui->mode == UI_MODE_MAIN) {
-        /* Top Header Bar */
-        draw_rect(0, 0, 320.0f, 22.0f, ui->col_header);
-        draw_text(ui, 6.0f, 4.0f, 0.42f, ui->col_text, "ROS 2 CONTROLLER");
-        draw_textf(ui, 190.0f, 5.0f, 0.34f, ui->col_subtext, "DOM: %lu | NS: %s",
-                   (unsigned long)dds->config.domain_id, dds->config.ros_namespace);
+        /* Row 2: Action Buttons */
+        draw_button(ui, 4.0f, 28.0f, 102.0f, 24.0f, ui->col_btn, ui->col_border, "SEND CMD", NULL);
 
-        /* Action Buttons Row 1 */
-        draw_button(ui, 6.0f, 26.0f, 96.0f, 28.0f, ui->col_btn, ui->col_border, "⌨ Send Cmd", NULL);
-        draw_button(ui, 108.0f, 26.0f, 96.0f, 28.0f, ui->col_btn, ui->col_border, "⚙ Config", NULL);
-        draw_button(ui, 210.0f, 26.0f, 104.0f, 28.0f, ui->col_danger, ui->col_border, "[ EXIT ]", NULL);
+        u32 joy_bg = dds->config.joy_enabled ? ui->col_success : ui->col_btn;
+        draw_button(ui, 110.0f, 28.0f, 102.0f, 24.0f, joy_bg, ui->col_border,
+                    dds->config.joy_enabled ? "JOY: ON" : "JOY: OFF", NULL);
 
-        /* Action Buttons Row 2 */
-        u32 joy_col = dds->config.joy_enabled ? ui->col_success : ui->col_btn;
-        u32 cam_col = dds->config.camera_enabled ? ui->col_btn_active : ui->col_btn;
-        draw_button(ui, 6.0f, 58.0f, 150.0f, 26.0f, joy_col, ui->col_border,
-                    dds->config.joy_enabled ? "Joy: STREAMING" : "Joy: DISABLED", NULL);
-        draw_button(ui, 164.0f, 58.0f, 150.0f, 26.0f, cam_col, ui->col_border,
-                    dds->config.camera_enabled ? "Camera RX: ACTIVE" : "Camera RX: OFF", NULL);
+        u32 cam_bg = dds->config.camera_enabled ? ui->col_btn_active : ui->col_btn;
+        draw_button(ui, 216.0f, 28.0f, 100.0f, 24.0f, cam_bg, ui->col_border,
+                    dds->config.camera_enabled ? "CAM: ON" : "CAM: OFF", NULL);
 
-        /* Live Gamepad Visualizer Panel */
-        float panel_y = 88.0f;
-        float panel_h = 128.0f;
-        draw_rect(6.0f, panel_y, 308.0f, panel_h, ui->col_surface);
-        draw_rect(6.0f, panel_y, 308.0f, 1.0f, ui->col_border);
+        /* Middle Area: 3 Columns */
+        /* Column 1: Circle Pad */
+        draw_stick_panel(ui, 4.0f, 54.0f, 102.0f, 126.0f, "CIRCLE PAD",
+                         ui->cpad_x, ui->cpad_y, ui->col_accent);
 
-        /* Left: Circle Pad Visualizer */
-        float cpad_cx = 54.0f;
-        float cpad_cy = 152.0f;
-        draw_rect(cpad_cx - 28.0f, cpad_cy - 28.0f, 56.0f, 56.0f, C2D_Color32(30, 35, 45, 255));
-        draw_rect(cpad_cx - 1.0f, cpad_cy - 28.0f, 2.0f, 56.0f, C2D_Color32(45, 52, 65, 255));
-        draw_rect(cpad_cx - 28.0f, cpad_cy - 1.0f, 56.0f, 2.0f, C2D_Color32(45, 52, 65, 255));
-        float cpad_px = cpad_cx - ui->cpad_x * 24.0f; /* X: left is positive in Joy */
-        float cpad_py = cpad_cy - ui->cpad_y * 24.0f; /* Y: up is positive in Joy */
-        draw_rect(cpad_px - 4.0f, cpad_py - 4.0f, 8.0f, 8.0f, ui->col_accent);
-        draw_text(ui, 24.0f, 100.0f, 0.34f, ui->col_subtext, "CIRCLE PAD");
-        draw_textf(ui, 18.0f, 190.0f, 0.30f, ui->col_text, "X:%+.2f Y:%+.2f", ui->cpad_x, ui->cpad_y);
+        /* Column 2: Physical Buttons Panel */
+        draw_panel(ui, 108.0f, 54.0f, 104.0f, 160.0f);
+        draw_text(ui, 136.0f, 58.0f, 0.36f, ui->col_muted, "BUTTONS");
 
-        /* Center: Button Badges */
         u32 k = ui->keys_held;
         /* Shoulders */
-        draw_badge(ui, 114.0f, 96.0f, 20.0f, 16.0f, "L", (k & KEY_L) != 0, ui->col_btn_active);
-        draw_badge(ui, 138.0f, 96.0f, 24.0f, 16.0f, "ZL", (k & KEY_ZL) != 0, ui->col_btn_active);
-        draw_badge(ui, 168.0f, 96.0f, 24.0f, 16.0f, "ZR", (k & KEY_ZR) != 0, ui->col_btn_active);
-        draw_badge(ui, 196.0f, 96.0f, 20.0f, 16.0f, "R", (k & KEY_R) != 0, ui->col_btn_active);
+        draw_badge(ui, 112.0f, 74.0f, 20.0f, 16.0f, "L", (k & KEY_L) != 0, ui->col_accent);
+        draw_badge(ui, 135.0f, 74.0f, 22.0f, 16.0f, "ZL", (k & KEY_ZL) != 0, ui->col_accent);
+        draw_badge(ui, 161.0f, 74.0f, 22.0f, 16.0f, "ZR", (k & KEY_ZR) != 0, ui->col_accent);
+        draw_badge(ui, 186.0f, 74.0f, 20.0f, 16.0f, "R", (k & KEY_R) != 0, ui->col_accent);
 
-        /* Face Buttons (X top, Y left, A right, B bottom) */
-        draw_badge(ui, 172.0f, 120.0f, 18.0f, 18.0f, "X", (k & KEY_X) != 0, C2D_Color32(46, 120, 242, 255));
-        draw_badge(ui, 150.0f, 138.0f, 18.0f, 18.0f, "Y", (k & KEY_Y) != 0, C2D_Color32(46, 160, 67, 255));
-        draw_badge(ui, 194.0f, 138.0f, 18.0f, 18.0f, "A", (k & KEY_A) != 0, C2D_Color32(218, 54, 51, 255));
-        draw_badge(ui, 172.0f, 156.0f, 18.0f, 18.0f, "B", (k & KEY_B) != 0, C2D_Color32(220, 180, 20, 255));
+        /* Face Buttons Diamond (Center: 160, 114) */
+        draw_badge(ui, 151.0f, 96.0f, 18.0f, 16.0f, "X", (k & KEY_X) != 0, C2D_Color32(46, 120, 242, 255));
+        draw_badge(ui, 131.0f, 112.0f, 18.0f, 16.0f, "Y", (k & KEY_Y) != 0, C2D_Color32(46, 160, 67, 255));
+        draw_badge(ui, 171.0f, 112.0f, 18.0f, 16.0f, "A", (k & KEY_A) != 0, C2D_Color32(218, 54, 51, 255));
+        draw_badge(ui, 151.0f, 128.0f, 18.0f, 16.0f, "B", (k & KEY_B) != 0, C2D_Color32(220, 180, 20, 255));
 
-        /* D-Pad */
-        draw_badge(ui, 122.0f, 120.0f, 16.0f, 16.0f, "^", (k & KEY_DUP) != 0, ui->col_btn_active);
-        draw_badge(ui, 104.0f, 138.0f, 16.0f, 16.0f, "<", (k & KEY_DLEFT) != 0, ui->col_btn_active);
-        draw_badge(ui, 140.0f, 138.0f, 16.0f, 16.0f, ">", (k & KEY_DRIGHT) != 0, ui->col_btn_active);
-        draw_badge(ui, 122.0f, 156.0f, 16.0f, 16.0f, "v", (k & KEY_DDOWN) != 0, ui->col_btn_active);
+        /* D-Pad Cross (Center: 160, 160) */
+        draw_badge(ui, 152.0f, 146.0f, 16.0f, 14.0f, "^", (k & KEY_DUP) != 0, ui->col_accent);
+        draw_badge(ui, 134.0f, 158.0f, 16.0f, 14.0f, "<", (k & KEY_DLEFT) != 0, ui->col_accent);
+        draw_badge(ui, 170.0f, 158.0f, 16.0f, 14.0f, ">", (k & KEY_DRIGHT) != 0, ui->col_accent);
+        draw_badge(ui, 152.0f, 170.0f, 16.0f, 14.0f, "v", (k & KEY_DDOWN) != 0, ui->col_accent);
 
         /* Select / Start */
-        draw_badge(ui, 116.0f, 186.0f, 36.0f, 16.0f, "SELECT", (k & KEY_SELECT) != 0, ui->col_btn_active);
-        draw_badge(ui, 166.0f, 186.0f, 36.0f, 16.0f, "START", (k & KEY_START) != 0, ui->col_btn_active);
+        draw_badge(ui, 116.0f, 190.0f, 40.0f, 18.0f, "SEL", (k & KEY_SELECT) != 0, ui->col_accent);
+        draw_badge(ui, 164.0f, 190.0f, 40.0f, 18.0f, "STA", (k & KEY_START) != 0, ui->col_accent);
 
-        /* Right: C-Stick Visualizer */
-        float cstick_cx = 266.0f;
-        float cstick_cy = 152.0f;
-        draw_rect(cstick_cx - 28.0f, cstick_cy - 28.0f, 56.0f, 56.0f, C2D_Color32(30, 35, 45, 255));
-        draw_rect(cstick_cx - 1.0f, cstick_cy - 28.0f, 2.0f, 56.0f, C2D_Color32(45, 52, 65, 255));
-        draw_rect(cstick_cx - 28.0f, cstick_cy - 1.0f, 56.0f, 2.0f, C2D_Color32(45, 52, 65, 255));
-        float cstick_px = cstick_cx - ui->cstick_x * 24.0f;
-        float cstick_py = cstick_cy - ui->cstick_y * 24.0f;
-        draw_rect(cstick_px - 4.0f, cstick_py - 4.0f, 8.0f, 8.0f, ui->col_btn_active);
-        draw_text(ui, 244.0f, 100.0f, 0.34f, ui->col_subtext, "C-STICK");
-        draw_textf(ui, 230.0f, 190.0f, 0.30f, ui->col_text, "X:%+.2f Y:%+.2f", ui->cstick_x, ui->cstick_y);
+        /* Column 3: C-Stick */
+        draw_stick_panel(ui, 214.0f, 54.0f, 102.0f, 126.0f, "C-STICK",
+                         ui->cstick_x, ui->cstick_y, ui->col_btn_active);
 
-        /* Bottom Telemetry Bar or Status Msg */
-        draw_rect(0, 220.0f, 320.0f, 20.0f, ui->col_header);
-        if (ui->status_msg[0] != '\0' && osGetTime() < ui->status_expire_ms) {
-            draw_text(ui, 8.0f, 224.0f, 0.35f, ui->col_success, ui->status_msg);
-        } else {
-            draw_textf(ui, 8.0f, 224.0f, 0.33f, ui->col_subtext,
-                       "Joy TX: %lu msg  |  Cam RX: %lu frames (%.1ffps)",
-                       (unsigned long)dds->joy.published_count,
-                       (unsigned long)dds->camera.frames_received,
-                       dds->camera.current_fps);
-        }
     } else if (ui->mode == UI_MODE_SETTINGS) {
-        /* Header */
-        draw_rect(0, 0, 320.0f, 24.0f, ui->col_header);
-        draw_text(ui, 8.0f, 4.0f, 0.44f, ui->col_text, "⚙ CONTROLLER SETTINGS");
-
-        /* Options */
         char dom_label[64];
         snprintf(dom_label, sizeof(dom_label), "Domain ID: %lu", (unsigned long)dds->config.domain_id);
-        draw_button(ui, 8.0f, 28.0f, 304.0f, 32.0f, ui->col_surface, ui->col_border, dom_label, "Tap to change (0 - 232)");
+        draw_button(ui, 6.0f, 58.0f, 308.0f, 36.0f, ui->col_surface, ui->col_border, dom_label, "Tap to edit (0 - 232)");
 
         char ns_label[128];
         snprintf(ns_label, sizeof(ns_label), "Namespace: %.50s", dds->config.ros_namespace);
-        draw_button(ui, 8.0f, 64.0f, 304.0f, 32.0f, ui->col_surface, ui->col_border, ns_label, "Tap to change ROS namespace");
+        draw_button(ui, 6.0f, 98.0f, 308.0f, 36.0f, ui->col_surface, ui->col_border, ns_label, "Tap to edit ROS 2 namespace");
 
         char cam_label[160];
-        snprintf(cam_label, sizeof(cam_label), "Cam Topic: %.30s...", dds->config.camera_topic);
-        draw_button(ui, 8.0f, 100.0f, 304.0f, 32.0f, ui->col_surface, ui->col_border, cam_label, "Tap to change camera topic");
+        snprintf(cam_label, sizeof(cam_label), "Cam Topic: %.32s...", dds->config.camera_topic);
+        draw_button(ui, 6.0f, 138.0f, 308.0f, 36.0f, ui->col_surface, ui->col_border, cam_label, "Tap to edit camera topic");
 
-        draw_button(ui, 8.0f, 136.0f, 304.0f, 32.0f, ui->col_btn, ui->col_border, "💾 Save Configuration to SD", "Persists changes across launches");
-
-        /* Return button */
-        draw_button(ui, 16.0f, 180.0f, 288.0f, 38.0f, ui->col_accent, ui->col_border, "◀  BACK TO CONTROLLER", NULL);
-
-        /* Status msg */
-        if (ui->status_msg[0] != '\0' && osGetTime() < ui->status_expire_ms) {
-            draw_text(ui, 8.0f, 222.0f, 0.35f, ui->col_success, ui->status_msg);
-        }
+        draw_button(ui, 6.0f, 178.0f, 308.0f, 36.0f, ui->col_btn, ui->col_border, "SAVE CONFIG TO SD", "Write to /3ds/ros2_3ds_controller/config.ini");
     }
+
+    /* Bottom Telemetry Bar */
+    draw_rect(0, 218.0f, 320.0f, 22.0f, ui->col_header);
+    if (ui->status_msg[0] != '\0' && osGetTime() < ui->status_expire_ms) {
+        draw_text(ui, 8.0f, 222.0f, 0.36f, ui->col_success, ui->status_msg);
+    } else {
+        draw_textf(ui, 8.0f, 222.0f, 0.32f, ui->col_muted,
+                   "TX: %lu | RX: %lu (%.1f fps) | DOM: %lu",
+                   (unsigned long)dds->joy.published_count,
+                   (unsigned long)dds->camera.frames_received,
+                   dds->camera.current_fps,
+                   (unsigned long)dds->config.domain_id);
+    }
+}
+
+void touch_ui_render(touch_ui *ui, dds_controller_runtime *dds) {
+    if (!ui || !dds) return;
+
+    /* 1. Clear text buffer at frame start */
+    C2D_TextBufClear(ui->text_buf);
+
+    /* 2. Begin GPU frame */
+    C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
+
+    /* 3. Explicitly clear both target renderbuffers */
+    C2D_TargetClear(ui->top_screen, ui->col_bg);
+    C2D_TargetClear(ui->bottom_screen, ui->col_bg);
+
+    /* 4. Render top screen scene */
+    C2D_SceneBegin(ui->top_screen);
+    touch_ui_render_top_internal(ui, dds);
+
+    /* 5. Render bottom screen scene */
+    C2D_SceneBegin(ui->bottom_screen);
+    touch_ui_render_bottom_internal(ui, dds);
+
+    /* 6. End frame & flush */
+    C3D_FrameEnd(0);
 }

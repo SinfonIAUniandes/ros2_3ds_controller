@@ -253,29 +253,11 @@ void ros2_camera_sub_draw(ros2_camera_sub *sub, float screen_w, float screen_h) 
         float draw_x = (screen_w - draw_w) * 0.5f;
         float draw_y = (screen_h - draw_h) * 0.5f;
 
-        /* Clear pillarbox / letterbox bars with black */
-        C2D_DrawRectSolid(0, 0, 0.4f, screen_w, screen_h, C2D_Color32(0, 0, 0, 255));
+        /* Pillarbox / letterbox bars in black */
+        C2D_DrawRectSolid(0, 0, 0.5f, screen_w, screen_h, C2D_Color32(0, 0, 0, 255));
 
         /* Draw hardware-accelerated video frame */
         C2D_DrawImageAt(sub->image, draw_x, draw_y, 0.5f, NULL, scale, scale);
-
-        /* Render sleek semi-transparent OSD badge */
-        C2D_DrawRectSolid(draw_x + 8, draw_y + 8, 0.6f, 150, 20, C2D_Color32(10, 15, 20, 190));
-    } else {
-        /* Standby HUD */
-        C2D_DrawRectSolid(0, 0, 0.5f, screen_w, screen_h, C2D_Color32(22, 27, 34, 255));
-
-        /* Standby box */
-        float box_w = 340.0f;
-        float box_h = 140.0f;
-        float box_x = (screen_w - box_w) * 0.5f;
-        float box_y = (screen_h - box_h) * 0.5f;
-
-        C2D_DrawRectSolid(box_x, box_y, 0.6f, box_w, box_h, C2D_Color32(33, 38, 45, 255));
-        C2D_DrawRectSolid(box_x + 2, box_y + 2, 0.7f, box_w - 4, box_h - 4, C2D_Color32(22, 27, 34, 255));
-
-        /* Header bar in standby box */
-        C2D_DrawRectSolid(box_x + 2, box_y + 2, 0.8f, box_w - 4, 26, C2D_Color32(48, 54, 61, 255));
     }
 }
 
