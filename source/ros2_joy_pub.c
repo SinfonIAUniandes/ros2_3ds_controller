@@ -219,3 +219,15 @@ void ros2_joy_pub_stop(ros2_joy_pub *joy) {
     }
     joy->enabled = false;
 }
+
+bool ros2_joy_pub_set_topic(ros2_joy_pub *joy, dds_entity_t participant, const char *new_topic, bool reliable) {
+    if (!joy || !new_topic || new_topic[0] == '\0') return false;
+
+    ros2_joy_pub_stop(joy);
+    joy->published_count = 0;
+
+    if (participant > DDS_ENTITY_NIL) {
+        return ros2_joy_pub_start(joy, participant, new_topic, reliable);
+    }
+    return true;
+}

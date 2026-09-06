@@ -114,13 +114,35 @@ int main(int argc, char **argv) {
                 case UI_ACTION_TOGGLE_JOY:
                     dds.config.joy_enabled = !dds.config.joy_enabled;
                     dds.joy.enabled = dds.config.joy_enabled;
+                    if (dds.config.joy_enabled) {
+                        if (dds.joy.writer <= DDS_ENTITY_NIL && dds.participant > DDS_ENTITY_NIL) {
+                            const char *joy_topic = (dds.config.joy_topic[0] != '\0')
+                                ? dds.config.joy_topic : dds.config.ros_namespace;
+                            ros2_joy_pub_start(&dds.joy, dds.participant, joy_topic, dds.config.joy_reliable);
+                        }
+                    } else {
+                        if (dds.joy.writer > DDS_ENTITY_NIL) {
+                            ros2_joy_pub_stop(&dds.joy);
+                        }
+                    }
                     controller_config_save(&dds.config);
+                    dds_controller_runtime_refresh_graph(&dds);
                     touch_ui_set_status(&ui, dds.config.joy_enabled ? "Joy Streaming: ON" : "Joy Streaming: OFF");
                     break;
                 case UI_ACTION_TOGGLE_CAMERA:
                     dds.config.camera_enabled = !dds.config.camera_enabled;
                     dds.camera.enabled = dds.config.camera_enabled;
+                    if (dds.config.camera_enabled) {
+                        if (dds.camera.reader <= DDS_ENTITY_NIL && dds.participant > DDS_ENTITY_NIL) {
+                            ros2_camera_sub_start(&dds.camera, dds.participant, dds.config.camera_topic);
+                        }
+                    } else {
+                        if (dds.camera.reader > DDS_ENTITY_NIL) {
+                            ros2_camera_sub_stop(&dds.camera);
+                        }
+                    }
                     controller_config_save(&dds.config);
+                    dds_controller_runtime_refresh_graph(&dds);
                     touch_ui_set_status(&ui, dds.config.camera_enabled ? "Camera RX: ON" : "Camera RX: OFF");
                     break;
                 case UI_ACTION_EDIT_DOMAIN_ID: {

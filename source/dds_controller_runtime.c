@@ -167,7 +167,18 @@ bool dds_controller_runtime_set_joy_topic(dds_controller_runtime *rt, const char
 
     controller_config_set_joy_topic(&rt->config, new_joy_topic);
     controller_config_save(&rt->config);
-    return dds_controller_runtime_restart(rt, &rt->config);
+
+    if (rt->running && rt->participant > DDS_ENTITY_NIL) {
+        bool ok = true;
+        if (rt->config.joy_enabled) {
+            ok = ros2_joy_pub_set_topic(&rt->joy, rt->participant, rt->config.joy_topic, rt->config.joy_reliable);
+        } else {
+            ros2_joy_pub_stop(&rt->joy);
+        }
+        (void)dds_controller_runtime_refresh_graph(rt);
+        return ok;
+    }
+    return true;
 }
 
 bool dds_controller_runtime_set_joy_reliable(dds_controller_runtime *rt, bool reliable) {
@@ -176,7 +187,16 @@ bool dds_controller_runtime_set_joy_reliable(dds_controller_runtime *rt, bool re
 
     rt->config.joy_reliable = reliable;
     controller_config_save(&rt->config);
-    return dds_controller_runtime_restart(rt, &rt->config);
+
+    if (rt->running && rt->participant > DDS_ENTITY_NIL) {
+        bool ok = true;
+        if (rt->config.joy_enabled) {
+            ok = ros2_joy_pub_set_topic(&rt->joy, rt->participant, rt->config.joy_topic, rt->config.joy_reliable);
+        }
+        (void)dds_controller_runtime_refresh_graph(rt);
+        return ok;
+    }
+    return true;
 }
 
 bool dds_controller_runtime_set_camera_topic(dds_controller_runtime *rt, const char *new_camera_topic) {

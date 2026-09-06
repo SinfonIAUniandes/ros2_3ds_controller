@@ -33,6 +33,7 @@ bool ros2_joy_pub_publish(ros2_joy_pub *joy, uint64_t timestamp_ms,
                           const touchPosition *touch,
                           bool is_touching);
 int32_t ros2_joy_pub_writer_matches(const ros2_joy_pub *joy);
+bool ros2_joy_pub_set_topic(ros2_joy_pub *joy, dds_entity_t participant, const char *new_topic, bool reliable);
 void ros2_joy_pub_stop(ros2_joy_pub *joy);
 
 #endif

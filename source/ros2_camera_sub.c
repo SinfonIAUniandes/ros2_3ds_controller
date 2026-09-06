@@ -200,7 +200,7 @@ static void update_texture_from_rgba(ros2_camera_sub *sub, uint32_t width, uint3
 #define CAMERA_BATCH_SIZE 8
 
 bool ros2_camera_sub_poll(ros2_camera_sub *sub) {
-    if (!sub || !sub->enabled || sub->reader <= DDS_ENTITY_NIL || !sub->tj || !sub->rgba_buffer) {
+    if (!sub || sub->reader <= DDS_ENTITY_NIL || !sub->tj || !sub->rgba_buffer) {
         return false;
     }
 
@@ -208,6 +208,18 @@ bool ros2_camera_sub_poll(ros2_camera_sub *sub) {
     dds_sample_info_t infos[CAMERA_BATCH_SIZE];
     dds_return_t count = 0;
     bool new_frame_decoded = false;
+
+    /* If camera RX is disabled by user, drain and discard pending samples so reader queue never clogs DDS */
+    if (!sub->enabled) {
+        while (1) {
+            memset(samples, 0, sizeof(samples));
+            count = dds_take(sub->reader, samples, infos, CAMERA_BATCH_SIZE, CAMERA_BATCH_SIZE);
+            if (count <= 0) break;
+            dds_return_loan(sub->reader, samples, count);
+            if (count < CAMERA_BATCH_SIZE) break;
+        }
+        return false;
+    }
 
     /* Drain all available samples from reader in batches. Only decompress the latest valid frame
        to maintain real-time zero latency and prevent Cyclone DDS / OS socket buffer congestion. */
@@ -252,9 +264,11 @@ bool ros2_camera_sub_poll(ros2_camera_sub *sub) {
                             dec_h = (orig_h + 1) / 2;
                         }
 
+                        /* Citro3D GPU_RGBA8 format stores pixels in memory as [A, B, G, R] byte order.
+                           Using TJPF_ABGR ensures correct colors without any red channel flooding. */
                         if (tjDecompress2(sub->tj, (unsigned char *)sample->data._buffer,
                                           sample->data._length, sub->rgba_buffer,
-                                          dec_w, 0, dec_h, TJPF_RGBA, TJFLAG_FASTDCT) == 0) {
+                                          dec_w, 0, dec_h, TJPF_ABGR, TJFLAG_FASTDCT) == 0) {
                             update_texture_from_rgba(sub, (uint32_t)dec_w, (uint32_t)dec_h);
                             sub->frames_received++;
                             sub->fps_counter++;
