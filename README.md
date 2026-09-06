@@ -6,6 +6,34 @@ The 3DS connects directly to your ROS 2 network over Wi-Fi via native DDS (Cyclo
 
 ---
 
+## 🚀 Quick Start & Installation
+
+Pre-compiled, ready-to-use binaries are available on the **[Releases Page (v1.0.0)](https://github.com/SinfonIAUniandes/ros2_3ds_controller/releases/tag/v1.0.0)**.
+
+### Step 1: Install on Nintendo 3DS
+1. Download **`ros2_3ds_controller-v1.0.0.zip`** (or `ros2_3ds_controller.3dsx` and `ros2_3ds_controller.smdh`) from the latest release.
+2. Place the files on your 3DS SD card at:
+   ```text
+   sdmc:/3ds/ros2_3ds_controller/ros2_3ds_controller.3dsx
+   sdmc:/3ds/ros2_3ds_controller/ros2_3ds_controller.smdh
+   ```
+3. Put the SD card back in your 3DS and open **Homebrew Launcher**.
+4. Launch **ROS 2 Controller**!
+
+### Step 2: Connect to your Robot
+1. Ensure your Nintendo 3DS and your ROS 2 robot or PC are connected to the **same local Wi-Fi network**.
+2. Tap **`[ ⚙ Config ]`** on the bottom touch screen to verify settings:
+   - **Domain ID:** Must match your `ROS_DOMAIN_ID` (default is `0`).
+   - **Namespace:** Prefix for topics (default: `/nintendo_3ds`).
+   - **Camera Topic:** ROS 2 compressed image topic (e.g. `/camera/image_raw/compressed`).
+   - Tap **`💾 Save Configuration to SD`** to preserve your settings across reboots.
+3. Tap **`[ Joy: OFF ]`** to turn on Joy publishing (`[ Joy: ON ]`).
+4. Tap **`[ Cam: OFF ]`** to turn on Camera receiving (`[ Cam: ON ]`).
+5. Your physical buttons (A/B/X/Y/D-Pad/Shoulders) and Circle Pad will now control your robot!
+
+
+---
+
 ## Key Features
 
 - **🎮 100% Physical Button Isolation:**

@@ -6,4 +6,5 @@ build/
 *.smdh
 *.log
 *.dmp
+*.zip
 parse_dmp.py
