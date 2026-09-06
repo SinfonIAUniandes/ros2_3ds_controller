@@ -211,7 +211,18 @@ bool ros2_camera_sub_poll(ros2_camera_sub *sub) {
 
     /* Drain all available samples from reader in batches. Only decompress the latest valid frame
        to maintain real-time zero latency and prevent Cyclone DDS / OS socket buffer congestion. */
-    while ((count = dds_take(sub->reader, samples, infos, CAMERA_BATCH_SIZE, CAMERA_BATCH_SIZE)) > 0) {
+    while (1) {
+        /* CRITICAL: buf[0] MUST be NULL on entry to dds_take, otherwise Cyclone DDS assumes
+           buf[0] points to an existing initialized user-allocated sample and tries to free its
+           nested pointers, causing an immediate crash. */
+        memset(samples, 0, sizeof(samples));
+        memset(infos, 0, sizeof(infos));
+
+        count = dds_take(sub->reader, samples, infos, CAMERA_BATCH_SIZE, CAMERA_BATCH_SIZE);
+        if (count <= 0) {
+            break;
+        }
+
         int latest_valid_idx = -1;
         for (int i = (int)count - 1; i >= 0; i--) {
             if (infos[i].valid_data && samples[i] != NULL) {
@@ -234,9 +245,9 @@ bool ros2_camera_sub_poll(ros2_camera_sub *sub) {
                         int dec_w = orig_w;
                         int dec_h = orig_h;
 
-                        /* If image resolution is 640x480 or larger, downscale by 1/2 via
+                        /* If image resolution is larger than 3DS top screen, downscale by 1/2 via
                            TurboJPEG fast IDCT scaling to fit 400x240 screen and save CPU time */
-                        if (orig_w >= 640 || orig_h >= 480) {
+                        if (orig_w > 400 || orig_h > 240) {
                             dec_w = (orig_w + 1) / 2;
                             dec_h = (orig_h + 1) / 2;
                         }
