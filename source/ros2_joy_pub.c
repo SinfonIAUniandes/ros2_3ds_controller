@@ -29,21 +29,44 @@ void ros2_joy_pub_init(ros2_joy_pub *joy, float deadzone) {
     joy->writer = DDS_ENTITY_NIL;
     joy->last_result = DDS_RETCODE_OK;
     joy->enabled = true;
+    joy->reliable = true;
     joy->published_count = 0;
     joy->deadzone = (deadzone >= 0.0f && deadzone <= 0.5f) ? deadzone : 0.08f;
+    joy->ros_topic_name[0] = '\0';
     joy->dds_topic_name[0] = '\0';
 }
 
-bool ros2_joy_pub_start(ros2_joy_pub *joy, dds_entity_t participant, const char *ros_namespace) {
+bool ros2_joy_pub_start(ros2_joy_pub *joy, dds_entity_t participant, const char *ros_topic_or_ns, bool reliable) {
     if (!joy || participant <= DDS_ENTITY_NIL) return false;
 
-    if (!ros2_dds_name(joy->dds_topic_name, sizeof(joy->dds_topic_name), "rt",
-                       ros_namespace, "joy")) {
+    joy->reliable = reliable;
+
+    /* If ros_topic_or_ns is specified as a full topic (e.g. ends with joy or has multiple slashes) */
+    if (ros_topic_or_ns && ros_topic_or_ns[0] != '\0') {
+        if (strstr(ros_topic_or_ns, "joy") != NULL) {
+            snprintf(joy->ros_topic_name, sizeof(joy->ros_topic_name), "%s", ros_topic_or_ns);
+            const char *raw = joy->ros_topic_name;
+            while (*raw == '/') raw++;
+            snprintf(joy->dds_topic_name, sizeof(joy->dds_topic_name), "rt/%s", raw);
+        } else {
+            /* Treat as namespace */
+            if (!ros2_dds_name(joy->dds_topic_name, sizeof(joy->dds_topic_name), "rt",
+                               ros_topic_or_ns, "joy")) {
+                snprintf(joy->dds_topic_name, sizeof(joy->dds_topic_name), "rt/nintendo_3ds/joy");
+            }
+            if (strcmp(ros_topic_or_ns, "/") == 0) {
+                snprintf(joy->ros_topic_name, sizeof(joy->ros_topic_name), "/joy");
+            } else {
+                snprintf(joy->ros_topic_name, sizeof(joy->ros_topic_name), "%s/joy", ros_topic_or_ns);
+            }
+        }
+    } else {
+        snprintf(joy->ros_topic_name, sizeof(joy->ros_topic_name), "/nintendo_3ds/joy");
         snprintf(joy->dds_topic_name, sizeof(joy->dds_topic_name), "rt/nintendo_3ds/joy");
     }
 
     dds_qos_t *qos = NULL;
-    if (!ros2_create_qos(&qos, 1, false, DDS_MSECS(100), false, NULL, false)) {
+    if (!ros2_create_qos(&qos, 10, reliable, DDS_MSECS(50), false, NULL, false)) {
         joy->last_result = DDS_RETCODE_OUT_OF_RESOURCES;
         return false;
     }
@@ -67,7 +90,9 @@ bool ros2_joy_pub_start(ros2_joy_pub *joy, dds_entity_t participant, const char 
     dds_delete_qos(qos);
     joy->last_result = DDS_RETCODE_OK;
     joy->enabled = true;
-    app_log_write(APP_LOG_INFO, "Joy publisher started on %s", joy->dds_topic_name);
+    app_log_write(APP_LOG_INFO, "Joy publisher started on %s (%s, QoS: %s)",
+                  joy->dds_topic_name, joy->ros_topic_name,
+                  reliable ? "Reliable" : "BestEffort");
     return true;
 }
 
@@ -166,7 +191,20 @@ bool ros2_joy_pub_publish(ros2_joy_pub *joy, uint64_t timestamp_ms,
         joy->published_count++;
         return true;
     }
+
+    static uint64_t last_joy_err_ms = 0;
+    if (timestamp_ms - last_joy_err_ms >= 2000) {
+        app_log_write(APP_LOG_ERROR, "Joy dds_write failed: %d", joy->last_result);
+        last_joy_err_ms = timestamp_ms;
+    }
     return false;
+}
+
+int32_t ros2_joy_pub_writer_matches(const ros2_joy_pub *joy) {
+    if (!joy || joy->writer <= DDS_ENTITY_NIL) return 0;
+    dds_publication_matched_status_t status = { 0 };
+    dds_return_t ret = dds_get_publication_matched_status(joy->writer, &status);
+    return (ret == DDS_RETCODE_OK) ? status.current_count : 0;
 }
 
 void ros2_joy_pub_stop(ros2_joy_pub *joy) {

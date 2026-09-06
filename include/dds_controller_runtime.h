@@ -33,7 +33,13 @@ bool dds_controller_runtime_restart(dds_controller_runtime *rt, const controller
 
 bool dds_controller_runtime_set_domain_id(dds_controller_runtime *rt, uint32_t new_domain_id);
 bool dds_controller_runtime_set_namespace(dds_controller_runtime *rt, const char *new_namespace);
+bool dds_controller_runtime_set_joy_topic(dds_controller_runtime *rt, const char *new_joy_topic);
+bool dds_controller_runtime_set_joy_reliable(dds_controller_runtime *rt, bool reliable);
 bool dds_controller_runtime_set_camera_topic(dds_controller_runtime *rt, const char *new_camera_topic);
+
+int32_t dds_controller_runtime_joy_matches(const dds_controller_runtime *rt);
+int32_t dds_controller_runtime_string_matches(const dds_controller_runtime *rt);
+int32_t dds_controller_runtime_camera_matches(const dds_controller_runtime *rt);
 
 bool dds_controller_runtime_publish_joy(dds_controller_runtime *rt, uint64_t timestamp_ms,
                                         const circlePosition *circle,

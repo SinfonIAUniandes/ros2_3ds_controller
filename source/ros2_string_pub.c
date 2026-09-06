@@ -15,6 +15,7 @@ void ros2_string_pub_init(ros2_string_pub *pub) {
     pub->last_result = DDS_RETCODE_OK;
     pub->published_count = 0;
     pub->last_sent[0] = '\0';
+    pub->ros_topic_name[0] = '\0';
     pub->dds_topic_name[0] = '\0';
 }
 
@@ -24,6 +25,13 @@ bool ros2_string_pub_start(ros2_string_pub *pub, dds_entity_t participant, const
     if (!ros2_dds_name(pub->dds_topic_name, sizeof(pub->dds_topic_name), "rt",
                        ros_namespace, "command")) {
         snprintf(pub->dds_topic_name, sizeof(pub->dds_topic_name), "rt/nintendo_3ds/command");
+    }
+
+    if (ros_namespace != NULL && strcmp(ros_namespace, "/") == 0) {
+        snprintf(pub->ros_topic_name, sizeof(pub->ros_topic_name), "/command");
+    } else {
+        snprintf(pub->ros_topic_name, sizeof(pub->ros_topic_name), "%s/command",
+                 ros_namespace != NULL && ros_namespace[0] != '\0' ? ros_namespace : "/nintendo_3ds");
     }
 
     dds_qos_t *qos = NULL;
@@ -71,6 +79,13 @@ bool ros2_string_pub_send(ros2_string_pub *pub, const char *text) {
     snprintf(pub->last_sent, sizeof(pub->last_sent), "%s", text);
     app_log_write(APP_LOG_INFO, "Published command: %s", text);
     return true;
+}
+
+int32_t ros2_string_pub_writer_matches(const ros2_string_pub *pub) {
+    if (!pub || pub->writer <= DDS_ENTITY_NIL) return 0;
+    dds_publication_matched_status_t status = { 0 };
+    dds_return_t ret = dds_get_publication_matched_status(pub->writer, &status);
+    return (ret == DDS_RETCODE_OK) ? status.current_count : 0;
 }
 
 void ros2_string_pub_stop(ros2_string_pub *pub) {

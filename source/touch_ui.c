@@ -195,16 +195,22 @@ ui_action touch_ui_handle_touch(touch_ui *ui, u16 px, u16 py) {
             }
         }
     } else if (ui->mode == UI_MODE_SETTINGS) {
-        if (hit_test(px, py, 6.0f, 58.0f, 308.0f, 36.0f)) {
+        if (hit_test(px, py, 6.0f, 30.0f, 308.0f, 32.0f)) {
             return UI_ACTION_EDIT_DOMAIN_ID;
         }
-        if (hit_test(px, py, 6.0f, 98.0f, 308.0f, 36.0f)) {
+        if (hit_test(px, py, 6.0f, 66.0f, 308.0f, 32.0f)) {
             return UI_ACTION_EDIT_NAMESPACE;
         }
-        if (hit_test(px, py, 6.0f, 138.0f, 308.0f, 36.0f)) {
+        if (hit_test(px, py, 6.0f, 102.0f, 308.0f, 32.0f)) {
+            return UI_ACTION_EDIT_JOY_TOPIC;
+        }
+        if (hit_test(px, py, 6.0f, 138.0f, 308.0f, 32.0f)) {
             return UI_ACTION_EDIT_CAMERA_TOPIC;
         }
-        if (hit_test(px, py, 6.0f, 178.0f, 308.0f, 36.0f)) {
+        if (hit_test(px, py, 6.0f, 174.0f, 148.0f, 38.0f)) {
+            return UI_ACTION_TOGGLE_JOY_QOS;
+        }
+        if (hit_test(px, py, 160.0f, 174.0f, 154.0f, 38.0f)) {
             return UI_ACTION_SAVE_CONFIG;
         }
     }
@@ -213,38 +219,67 @@ ui_action touch_ui_handle_touch(touch_ui *ui, u16 px, u16 py) {
 }
 
 static void touch_ui_render_top_internal(touch_ui *ui, dds_controller_runtime *dds) {
+    int32_t joy_matches = dds_controller_runtime_joy_matches(dds);
+    int32_t str_matches = dds_controller_runtime_string_matches(dds);
+    int32_t cam_matches = dds_controller_runtime_camera_matches(dds);
+
     if (dds->camera.enabled && dds->camera.has_frame) {
         ros2_camera_sub_draw(&dds->camera, 400.0f, 240.0f);
 
         draw_rect(0, 218.0f, 400.0f, 22.0f, C2D_Color32(10, 14, 20, 220));
-        draw_textf(ui, 8.0f, 222.0f, 0.36f, C2D_Color32(230, 240, 255, 255),
-                   "Topic: %s | %lux%lu @ %.1f FPS", dds->config.camera_topic,
+        draw_textf(ui, 8.0f, 222.0f, 0.34f, C2D_Color32(230, 240, 255, 255),
+                   "Cam: %lux%lu @ %.1f FPS | Joy: %lu [M:%d] | Dom: %lu",
                    (unsigned long)dds->camera.img_width,
                    (unsigned long)dds->camera.img_height,
-                   dds->camera.current_fps);
+                   dds->camera.current_fps,
+                   (unsigned long)dds->joy.published_count,
+                   joy_matches,
+                   (unsigned long)dds->config.domain_id);
     } else {
-        float box_x = 20.0f;
-        float box_y = 20.0f;
-        float box_w = 360.0f;
-        float box_h = 200.0f;
+        float box_x = 10.0f;
+        float box_y = 10.0f;
+        float box_w = 380.0f;
+        float box_h = 220.0f;
 
         draw_panel(ui, box_x, box_y, box_w, box_h);
-        draw_rect(box_x + 1.0f, box_y + 1.0f, box_w - 2.0f, 26.0f, ui->col_header);
+        draw_rect(box_x + 1.0f, box_y + 1.0f, box_w - 2.0f, 24.0f, ui->col_header);
 
-        draw_text(ui, box_x + 12.0f, box_y + 6.0f, 0.44f, ui->col_text, "ROS 2 ROBOT CAMERA MONITOR");
-        draw_text(ui, box_x + 14.0f, box_y + 38.0f, 0.36f, ui->col_muted, "Subscribed Topic:");
-        draw_text(ui, box_x + 14.0f, box_y + 54.0f, 0.42f, ui->col_accent, dds->config.camera_topic);
+        draw_text(ui, box_x + 10.0f, box_y + 5.0f, 0.40f, ui->col_text, "ROS 2 HANDHELD CONTROLLER MONITOR");
 
-        draw_textf(ui, box_x + 14.0f, box_y + 84.0f, 0.38f, ui->col_text,
+        /* Joy Topic and Match status */
+        u32 joy_match_col = (joy_matches > 0) ? ui->col_success : ui->col_danger;
+        draw_text(ui, box_x + 12.0f, box_y + 30.0f, 0.30f, ui->col_muted, "Joy Topic (Publish sensor_msgs/msg/Joy):");
+        draw_textf(ui, box_x + 12.0f, box_y + 43.0f, 0.36f, ui->col_accent,
+                   "%.30s", dds->joy.ros_topic_name[0] != '\0' ? dds->joy.ros_topic_name : dds->config.joy_topic);
+        draw_textf(ui, box_x + 220.0f, box_y + 43.0f, 0.34f, joy_match_col,
+                   "[MATCH: %d] (%s)", joy_matches, dds->config.joy_reliable ? "Reliable" : "BestEff");
+
+        /* Command Topic and Match status */
+        u32 str_match_col = (str_matches > 0) ? ui->col_success : ui->col_muted;
+        draw_text(ui, box_x + 12.0f, box_y + 64.0f, 0.30f, ui->col_muted, "Command Topic (Publish std_msgs/msg/String):");
+        draw_textf(ui, box_x + 12.0f, box_y + 77.0f, 0.36f, ui->col_text,
+                   "%.30s", dds->string_cmd.ros_topic_name);
+        draw_textf(ui, box_x + 220.0f, box_y + 77.0f, 0.34f, str_match_col,
+                   "[MATCH: %d]", str_matches);
+
+        /* Camera Topic and Match status */
+        u32 cam_match_col = (cam_matches > 0) ? ui->col_success : ui->col_muted;
+        draw_text(ui, box_x + 12.0f, box_y + 98.0f, 0.30f, ui->col_muted, "Camera Topic (Subscribe sensor_msgs/CompressedImage):");
+        draw_textf(ui, box_x + 12.0f, box_y + 111.0f, 0.36f, ui->col_accent,
+                   "%.30s", dds->config.camera_topic);
+        draw_textf(ui, box_x + 220.0f, box_y + 111.0f, 0.34f, cam_match_col,
+                   "[MATCH: %d]", cam_matches);
+
+        draw_textf(ui, box_x + 12.0f, box_y + 138.0f, 0.36f, ui->col_text,
                    "Domain ID: %lu   Namespace: %s", (unsigned long)dds->config.domain_id,
                    dds->config.ros_namespace);
 
         const char *status_str = dds->config.camera_enabled ? "Waiting for incoming CompressedImage..." : "Camera RX Disabled";
         u32 status_col = dds->config.camera_enabled ? ui->col_success : ui->col_danger;
-        draw_textf(ui, box_x + 14.0f, box_y + 108.0f, 0.36f, status_col, "Status: %s", status_str);
+        draw_textf(ui, box_x + 12.0f, box_y + 162.0f, 0.34f, status_col, "Status: %s", status_str);
 
-        draw_text(ui, box_x + 14.0f, box_y + 146.0f, 0.34f, ui->col_muted,
-                  "Use bottom screen [SETTINGS] to change topic or domain ID");
+        draw_text(ui, box_x + 12.0f, box_y + 192.0f, 0.31f, ui->col_muted,
+                  "Bottom screen [SETTINGS]: edit joy/camera topic, QoS, or domain");
     }
 }
 
@@ -307,17 +342,26 @@ static void touch_ui_render_bottom_internal(touch_ui *ui, dds_controller_runtime
     } else if (ui->mode == UI_MODE_SETTINGS) {
         char dom_label[64];
         snprintf(dom_label, sizeof(dom_label), "Domain ID: %lu", (unsigned long)dds->config.domain_id);
-        draw_button(ui, 6.0f, 58.0f, 308.0f, 36.0f, ui->col_surface, ui->col_border, dom_label, "Tap to edit (0 - 232)");
+        draw_button(ui, 6.0f, 30.0f, 308.0f, 32.0f, ui->col_surface, ui->col_border, dom_label, "Tap to edit (0 - 232)");
 
         char ns_label[128];
         snprintf(ns_label, sizeof(ns_label), "Namespace: %.50s", dds->config.ros_namespace);
-        draw_button(ui, 6.0f, 98.0f, 308.0f, 36.0f, ui->col_surface, ui->col_border, ns_label, "Tap to edit ROS 2 namespace");
+        draw_button(ui, 6.0f, 66.0f, 308.0f, 32.0f, ui->col_surface, ui->col_border, ns_label, "Tap to edit ROS 2 namespace");
+
+        char joy_label[160];
+        snprintf(joy_label, sizeof(joy_label), "Joy Topic: %.32s", dds->config.joy_topic);
+        draw_button(ui, 6.0f, 102.0f, 308.0f, 32.0f, ui->col_surface, ui->col_border, joy_label, "Tap to edit joy topic (/joy, etc.)");
 
         char cam_label[160];
         snprintf(cam_label, sizeof(cam_label), "Cam Topic: %.32s...", dds->config.camera_topic);
-        draw_button(ui, 6.0f, 138.0f, 308.0f, 36.0f, ui->col_surface, ui->col_border, cam_label, "Tap to edit camera topic");
+        draw_button(ui, 6.0f, 138.0f, 308.0f, 32.0f, ui->col_surface, ui->col_border, cam_label, "Tap to edit camera topic");
 
-        draw_button(ui, 6.0f, 178.0f, 308.0f, 36.0f, ui->col_btn, ui->col_border, "SAVE CONFIG TO SD", "Write to /3ds/ros2_3ds_controller/config.ini");
+        const char *qos_str = dds->config.joy_reliable ? "QoS: RELIABLE" : "QoS: BEST_EFF";
+        const char *qos_sub = dds->config.joy_reliable ? "Tap for BestEff" : "Tap for Reliable";
+        u32 qos_bg = dds->config.joy_reliable ? ui->col_btn_active : ui->col_btn;
+        draw_button(ui, 6.0f, 174.0f, 148.0f, 38.0f, qos_bg, ui->col_border, qos_str, qos_sub);
+
+        draw_button(ui, 160.0f, 174.0f, 154.0f, 38.0f, ui->col_btn, ui->col_border, "SAVE TO SD", "Save config.ini");
     }
 
     /* Bottom Telemetry Bar */
@@ -325,9 +369,11 @@ static void touch_ui_render_bottom_internal(touch_ui *ui, dds_controller_runtime
     if (ui->status_msg[0] != '\0' && osGetTime() < ui->status_expire_ms) {
         draw_text(ui, 8.0f, 222.0f, 0.36f, ui->col_success, ui->status_msg);
     } else {
+        int32_t joy_matches = dds_controller_runtime_joy_matches(dds);
         draw_textf(ui, 8.0f, 222.0f, 0.32f, ui->col_muted,
-                   "TX: %lu | RX: %lu (%.1f fps) | DOM: %lu",
+                   "TX: %lu (M:%d) | RX: %lu (%.1f fps) | DOM: %lu",
                    (unsigned long)dds->joy.published_count,
+                   joy_matches,
                    (unsigned long)dds->camera.frames_received,
                    dds->camera.current_fps,
                    (unsigned long)dds->config.domain_id);

@@ -10,9 +10,11 @@
 typedef struct {
     uint32_t domain_id;
     char ros_namespace[64];
+    char joy_topic[128];
     char camera_topic[128];
     uint32_t joy_publish_hz;
     float joy_deadzone;
+    bool joy_reliable;
     char peer_ip[64];
     char broadcast_ip[64];
     bool joy_enabled;
@@ -23,6 +25,7 @@ void controller_config_init_defaults(controller_config *cfg);
 bool controller_config_load(controller_config *cfg);
 bool controller_config_save(const controller_config *cfg);
 void controller_config_set_namespace(controller_config *cfg, const char *ns);
+void controller_config_set_joy_topic(controller_config *cfg, const char *topic);
 void controller_config_set_camera_topic(controller_config *cfg, const char *topic);
 
 #endif

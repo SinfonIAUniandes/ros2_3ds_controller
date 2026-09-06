@@ -156,6 +156,25 @@ int main(int argc, char **argv) {
                     }
                     break;
                 }
+                case UI_ACTION_EDIT_JOY_TOPIC: {
+                    char val[128];
+                    snprintf(val, sizeof(val), "%s", dds.config.joy_topic);
+                    SwkbdState swkbd;
+                    swkbdInit(&swkbd, SWKBD_TYPE_NORMAL, 2, sizeof(val) - 1);
+                    swkbdSetInitialText(&swkbd, val);
+                    swkbdSetHintText(&swkbd, "Joy Topic (e.g. /joy)");
+                    swkbdSetButton(&swkbd, SWKBD_BUTTON_LEFT, "Cancel", false);
+                    swkbdSetButton(&swkbd, SWKBD_BUTTON_RIGHT, "Apply", true);
+                    if (swkbdInputText(&swkbd, val, sizeof(val)) == SWKBD_BUTTON_RIGHT && val[0] != '\0') {
+                        dds_controller_runtime_set_joy_topic(&dds, val);
+                        touch_ui_set_status(&ui, "Joy Topic Updated");
+                    }
+                    break;
+                }
+                case UI_ACTION_TOGGLE_JOY_QOS:
+                    dds_controller_runtime_set_joy_reliable(&dds, !dds.config.joy_reliable);
+                    touch_ui_set_status(&ui, dds.config.joy_reliable ? "Joy QoS: Reliable" : "Joy QoS: BestEffort");
+                    break;
                 case UI_ACTION_EDIT_CAMERA_TOPIC: {
                     char val[128];
                     snprintf(val, sizeof(val), "%s", dds.config.camera_topic);
@@ -192,6 +211,13 @@ int main(int argc, char **argv) {
         if (now - last_joy_publish_ms >= joy_interval_ms) {
             dds_controller_runtime_publish_joy(&dds, now, &circle, &cstick, kHeld, &touch, is_touching);
             last_joy_publish_ms = now;
+        }
+
+        /* Periodically refresh ROS 2 discovery graph (ros_discovery_info) every 5 seconds */
+        static uint64_t next_graph_refresh_ms = 0;
+        if (dds.running && now >= next_graph_refresh_ms) {
+            dds_controller_runtime_refresh_graph(&dds);
+            next_graph_refresh_ms = now + 5000;
         }
 
         /* Poll camera DDS reader for new video frames */

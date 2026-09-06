@@ -88,7 +88,9 @@ bool dds_controller_runtime_start(dds_controller_runtime *rt, const controller_c
 
     ros2_joy_pub_init(&rt->joy, rt->config.joy_deadzone);
     if (rt->config.joy_enabled) {
-        (void)ros2_joy_pub_start(&rt->joy, rt->participant, rt->config.ros_namespace);
+        const char *joy_topic = (rt->config.joy_topic[0] != '\0')
+            ? rt->config.joy_topic : rt->config.ros_namespace;
+        (void)ros2_joy_pub_start(&rt->joy, rt->participant, joy_topic, rt->config.joy_reliable);
     }
 
     (void)ros2_string_pub_start(&rt->string_cmd, rt->participant, rt->config.ros_namespace);
@@ -103,8 +105,8 @@ bool dds_controller_runtime_start(dds_controller_runtime *rt, const controller_c
     }
 
     rt->running = true;
-    app_log_write(APP_LOG_INFO, "DDS runtime started (Domain ID: %lu, NS: %s)",
-                  (unsigned long)rt->config.domain_id, rt->config.ros_namespace);
+    app_log_write(APP_LOG_INFO, "DDS runtime started (Domain ID: %lu, NS: %s, Joy: %s)",
+                  (unsigned long)rt->config.domain_id, rt->config.ros_namespace, rt->config.joy_topic);
     return true;
 }
 
@@ -154,6 +156,23 @@ bool dds_controller_runtime_set_namespace(dds_controller_runtime *rt, const char
     return dds_controller_runtime_restart(rt, &rt->config);
 }
 
+bool dds_controller_runtime_set_joy_topic(dds_controller_runtime *rt, const char *new_joy_topic) {
+    if (!rt || !new_joy_topic) return false;
+
+    controller_config_set_joy_topic(&rt->config, new_joy_topic);
+    controller_config_save(&rt->config);
+    return dds_controller_runtime_restart(rt, &rt->config);
+}
+
+bool dds_controller_runtime_set_joy_reliable(dds_controller_runtime *rt, bool reliable) {
+    if (!rt) return false;
+    if (rt->config.joy_reliable == reliable && rt->running) return true;
+
+    rt->config.joy_reliable = reliable;
+    controller_config_save(&rt->config);
+    return dds_controller_runtime_restart(rt, &rt->config);
+}
+
 bool dds_controller_runtime_set_camera_topic(dds_controller_runtime *rt, const char *new_camera_topic) {
     if (!rt || !new_camera_topic) return false;
 
@@ -166,6 +185,18 @@ bool dds_controller_runtime_set_camera_topic(dds_controller_runtime *rt, const c
         return ok;
     }
     return true;
+}
+
+int32_t dds_controller_runtime_joy_matches(const dds_controller_runtime *rt) {
+    return rt ? ros2_joy_pub_writer_matches(&rt->joy) : 0;
+}
+
+int32_t dds_controller_runtime_string_matches(const dds_controller_runtime *rt) {
+    return rt ? ros2_string_pub_writer_matches(&rt->string_cmd) : 0;
+}
+
+int32_t dds_controller_runtime_camera_matches(const dds_controller_runtime *rt) {
+    return rt ? ros2_camera_sub_reader_matches(&rt->camera) : 0;
 }
 
 bool dds_controller_runtime_publish_joy(dds_controller_runtime *rt, uint64_t timestamp_ms,

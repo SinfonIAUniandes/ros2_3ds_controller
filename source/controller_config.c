@@ -24,9 +24,11 @@ void controller_config_init_defaults(controller_config *cfg) {
     memset(cfg, 0, sizeof(*cfg));
     cfg->domain_id = 0;
     snprintf(cfg->ros_namespace, sizeof(cfg->ros_namespace), "/nintendo_3ds");
+    snprintf(cfg->joy_topic, sizeof(cfg->joy_topic), "/nintendo_3ds/joy");
     snprintf(cfg->camera_topic, sizeof(cfg->camera_topic), "/camera/image_raw/compressed");
     cfg->joy_publish_hz = 30;
     cfg->joy_deadzone = 0.08f;
+    cfg->joy_reliable = true;
     cfg->peer_ip[0] = '\0';
     cfg->broadcast_ip[0] = '\0';
     cfg->joy_enabled = true;
@@ -50,6 +52,37 @@ void controller_config_set_namespace(controller_config *cfg, const char *ns) {
     size_t len = strlen(cfg->ros_namespace);
     while (len > 1 && cfg->ros_namespace[len - 1] == '/') {
         cfg->ros_namespace[--len] = '\0';
+    }
+
+    /* Keep default joy topic in sync if user hasn't explicitly set a custom non-matching topic */
+    if (strcmp(cfg->ros_namespace, "/") == 0) {
+        snprintf(cfg->joy_topic, sizeof(cfg->joy_topic), "/joy");
+    } else {
+        snprintf(cfg->joy_topic, sizeof(cfg->joy_topic), "%s/joy", cfg->ros_namespace);
+    }
+}
+
+void controller_config_set_joy_topic(controller_config *cfg, const char *topic) {
+    if (!cfg) return;
+    if (!topic || topic[0] == '\0') {
+        if (strcmp(cfg->ros_namespace, "/") == 0) {
+            snprintf(cfg->joy_topic, sizeof(cfg->joy_topic), "/joy");
+        } else {
+            snprintf(cfg->joy_topic, sizeof(cfg->joy_topic), "%s/joy", cfg->ros_namespace);
+        }
+        return;
+    }
+    char temp[120];
+    snprintf(temp, sizeof(temp), "%s", topic);
+    trim(temp);
+    if (temp[0] != '/') {
+        snprintf(cfg->joy_topic, sizeof(cfg->joy_topic), "/%.120s", temp);
+    } else {
+        snprintf(cfg->joy_topic, sizeof(cfg->joy_topic), "%.124s", temp);
+    }
+    size_t len = strlen(cfg->joy_topic);
+    while (len > 1 && cfg->joy_topic[len - 1] == '/') {
+        cfg->joy_topic[--len] = '\0';
     }
 }
 
@@ -95,6 +128,8 @@ static bool parse_config_file(controller_config *cfg, const char *path) {
             if (d >= 0 && d <= 232) cfg->domain_id = (uint32_t)d;
         } else if (strcmp(key, "ros_namespace") == 0) {
             controller_config_set_namespace(cfg, val);
+        } else if (strcmp(key, "joy_topic") == 0) {
+            controller_config_set_joy_topic(cfg, val);
         } else if (strcmp(key, "camera_topic") == 0) {
             controller_config_set_camera_topic(cfg, val);
         } else if (strcmp(key, "joy_publish_hz") == 0) {
@@ -103,6 +138,8 @@ static bool parse_config_file(controller_config *cfg, const char *path) {
         } else if (strcmp(key, "joy_deadzone") == 0) {
             float dz = strtof(val, NULL);
             if (dz >= 0.0f && dz <= 0.5f) cfg->joy_deadzone = dz;
+        } else if (strcmp(key, "joy_reliable") == 0) {
+            cfg->joy_reliable = (strtol(val, NULL, 10) != 0);
         } else if (strcmp(key, "peer_ip") == 0) {
             snprintf(cfg->peer_ip, sizeof(cfg->peer_ip), "%s", val);
         } else if (strcmp(key, "broadcast_ip") == 0) {
@@ -140,9 +177,11 @@ bool controller_config_save(const controller_config *cfg) {
     fprintf(f, "# Auto-generated and updated from touch screen\n\n");
     fprintf(f, "domain_id=%lu\n", (unsigned long)cfg->domain_id);
     fprintf(f, "ros_namespace=%s\n", cfg->ros_namespace);
+    fprintf(f, "joy_topic=%s\n", cfg->joy_topic);
     fprintf(f, "camera_topic=%s\n", cfg->camera_topic);
     fprintf(f, "joy_publish_hz=%lu\n", (unsigned long)cfg->joy_publish_hz);
     fprintf(f, "joy_deadzone=%.3f\n", cfg->joy_deadzone);
+    fprintf(f, "joy_reliable=%d\n", cfg->joy_reliable ? 1 : 0);
     fprintf(f, "peer_ip=%s\n", cfg->peer_ip);
     fprintf(f, "broadcast_ip=%s\n", cfg->broadcast_ip);
     fprintf(f, "joy_enabled=%d\n", cfg->joy_enabled ? 1 : 0);

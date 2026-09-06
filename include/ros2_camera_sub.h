@@ -44,6 +44,7 @@ bool ros2_camera_sub_start(ros2_camera_sub *sub, dds_entity_t participant, const
 bool ros2_camera_sub_set_topic(ros2_camera_sub *sub, dds_entity_t participant, const char *new_topic);
 bool ros2_camera_sub_poll(ros2_camera_sub *sub);
 void ros2_camera_sub_draw(ros2_camera_sub *sub, float screen_w, float screen_h);
+int32_t ros2_camera_sub_reader_matches(const ros2_camera_sub *sub);
 void ros2_camera_sub_stop(ros2_camera_sub *sub);
 
 #endif
